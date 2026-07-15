@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "project": "FireNode",
+  "updated_at": "2026-07-15T00:00:00Z",
+  "channels": {
+    "stable": {
+      "latest": "",
+      "builds": []
+    },
+    "dev": {
+      "latest": "dev-1b1ac7b",
+      "builds": [
+        {
+          "tag": "dev-1b1ac7b",
+          "release_tag": "dev-binaries",
+          "source_sha": "1b1ac7b67730f49dbec070867bba6e6ecde295c7",
+          "created_at": "2026-07-15T00:00:00Z",
+          "assets": {
+            "linux-amd64": {
+              "name": "firenode-dev-linux-amd64",
+              "url": "https://github.com/firegoood/FireNode/releases/download/dev-binaries/firenode-dev-linux-amd64",
+              "sha256": "b51c7840ee529241c580583401cab0a0ea6988528ffa507b5ea83f76932d44d3"
+            },
+            "linux-arm64": {
+              "name": "firenode-dev-linux-arm64",
+              "url": "https://github.com/firegoood/FireNode/releases/download/dev-binaries/firenode-dev-linux-arm64",
+              "sha256": "a705bc6a85f24bef1046396754f2a885d1b3c15d8672ba43605470a9db65dccb"
+            },
+            "windows-amd64": {
+              "name": "firenode-dev-windows-amd64.exe",
+              "url": "https://github.com/firegoood/FireNode/releases/download/dev-binaries/firenode-dev-windows-amd64.exe",
+              "sha256": "f0d46bba74c0ea187b55a63dba039c3ecde81029db90a87e1e8c82538a6e3946"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
