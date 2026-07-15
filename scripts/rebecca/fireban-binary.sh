@@ -68,6 +68,19 @@ github_curl() {
     fi
 }
 
+# GitHub's raw-content CDN can briefly return a stale manifest immediately
+# after a new dev build is published. Keep query parameters intact and make
+# every release-manifest lookup unique so an updater never installs an older
+# verified package by accident.
+cache_busted_url() {
+    local url="$1"
+    local separator="?"
+    if [[ "$url" == *\?* ]]; then
+        separator="&"
+    fi
+    printf '%s%scache_bust=%s-%s\n' "$url" "$separator" "$(date +%s)" "$RANDOM"
+}
+
 colorized_echo() {
     local color=$1
     local text=$2
@@ -2656,7 +2669,7 @@ get_binary_distribution_metadata() {
         channel="dev"
     fi
 
-    manifest_payload=$(github_curl -fsSL "$FIREBAN_RELEASE_MANIFEST_URL") || {
+    manifest_payload=$(github_curl -fsSL -H 'Cache-Control: no-cache' "$(cache_busted_url "$FIREBAN_RELEASE_MANIFEST_URL")") || {
         colorized_echo red "Unable to read FireBan distribution manifest: $FIREBAN_RELEASE_MANIFEST_URL" >&2
         exit 1
     }
@@ -2767,7 +2780,7 @@ get_binary_dev_manifest_metadata() {
     local selected
 
     manifest_url=$(get_binary_dev_manifest_url)
-    manifest_payload=$(github_curl -fsSL "$manifest_url") || return 1
+    manifest_payload=$(github_curl -fsSL -H 'Cache-Control: no-cache' "$(cache_busted_url "$manifest_url")") || return 1
 
     selected=$(echo "$manifest_payload" | jq -r \
         --arg arch "linux-${binary_arch}" \
