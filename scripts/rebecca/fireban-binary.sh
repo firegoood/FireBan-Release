@@ -2372,12 +2372,12 @@ write_mysql_backup_defaults() {
     local defaults_file="$1"
     {
         echo "[client]"
-        [ -n "${BACKUP_DB_USER:-}" ] && printf 'user=%s\n' "$BACKUP_DB_USER"
-        [ -n "${BACKUP_DB_PASSWORD:-}" ] && printf 'password=%s\n' "$BACKUP_DB_PASSWORD"
+        [ -n "${BACKUP_DB_USER:-}" ] && printf 'user="%s"\n' "${BACKUP_DB_USER//\"/\\\"}"
+        [ -n "${BACKUP_DB_PASSWORD:-}" ] && printf 'password="%s"\n' "${BACKUP_DB_PASSWORD//\"/\\\"}"
         if [ -n "${BACKUP_DB_SOCKET:-}" ]; then
-            printf 'socket=%s\n' "$BACKUP_DB_SOCKET"
+            printf 'socket="%s"\n' "${BACKUP_DB_SOCKET//\"/\\\"}"
         else
-            printf 'host=%s\n' "${BACKUP_DB_HOST:-127.0.0.1}"
+            printf 'host="%s"\n' "${BACKUP_DB_HOST:-127.0.0.1}"
             printf 'port=%s\n' "${BACKUP_DB_PORT:-3306}"
             echo "protocol=tcp"
         fi
@@ -2402,6 +2402,7 @@ backup_command() {
 
     rm -rf "$backup_dir"
     mkdir -p "$backup_dir"
+    rm -rf "$temp_dir"
     mkdir -p "$temp_dir"
 
     if [ -f "$ENV_FILE" ]; then
@@ -2479,10 +2480,12 @@ backup_command() {
         esac
     fi
 
-    cp "$APP_DIR/.env" "$temp_dir/" 2>>"$log_file"
-    rsync -av --exclude 'xray-core' --exclude 'mysql' "$DATA_DIR/" "$temp_dir/rebecca_data/" >>"$log_file" 2>&1
+    cp "$APP_DIR/.env" "$temp_dir/" 2>>"$log_file" || true
+    if ! rsync -a --exclude 'xray-core' --exclude 'mysql' --exclude 'logs' "$DATA_DIR/" "$temp_dir/rebecca_data/" >>"$log_file" 2>&1; then
+        error_messages+=("Failed to copy FireBan data files.")
+    fi
 
-    if ! tar -czf "$backup_file" -C "$temp_dir" .; then
+    if ! tar -C "$temp_dir" -cf - . | gzip -1 > "$backup_file"; then
         error_messages+=("Failed to create backup archive.")
         echo "Failed to create backup archive." >> "$log_file"
     fi
