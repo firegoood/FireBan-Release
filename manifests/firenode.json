@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
   "project": "firenode",
-  "updated_at": "2026-07-19T20:22:49Z",
+  "updated_at": "2026-07-20T20:54:42Z",
   "channels": {
     "dev": {
-      "latest": "dev-0888dd7",
+      "latest": "dev-7e1dd5e",
       "builds": [
         {
-          "tag": "dev-0888dd7",
+          "tag": "dev-7e1dd5e",
           "release_tag": "firenode-dev-builds",
-          "source_sha": "0888dd7ace2a8a1a16f39ae05cdaa1974085594f",
-          "created_at": "2026-07-19T20:22:49Z",
+          "source_sha": "7e1dd5e36d9c8eae6d3ede2f218c24172a38f8a1",
+          "created_at": "2026-07-20T20:54:42Z",
           "assets": {
-            "windows-amd64": {
-              "name": "firenode-windows-amd64.exe-dev-0888dd7",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/firenode-dev-builds/firenode-windows-amd64.exe-dev-0888dd7",
-              "sha256": "7478d70763dc41fd2e2aa5b181d57d4f523613ddd135b8712bfb597329b90eb2"
-            },
             "linux-arm64": {
-              "name": "firenode-linux-arm64-dev-0888dd7",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/firenode-dev-builds/firenode-linux-arm64-dev-0888dd7",
-              "sha256": "8bea1db6b0f72e57f50d0ee3902bb3511a93e5465adeed019353501561fe1034"
+              "name": "firenode-linux-arm64-dev-7e1dd5e",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/firenode-dev-builds/firenode-linux-arm64-dev-7e1dd5e",
+              "sha256": "f986c159c61ac4e907c3721b61d17624008ab7882f73443ca1bf53e6d98316ae"
+            },
+            "windows-amd64": {
+              "name": "firenode-windows-amd64.exe-dev-7e1dd5e",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/firenode-dev-builds/firenode-windows-amd64.exe-dev-7e1dd5e",
+              "sha256": "b7e42fcba5a973939793c3a5b374c4cfb21dac18a4807d00b18ae30c3bd56eea"
             },
             "linux-amd64": {
-              "name": "firenode-linux-amd64-dev-0888dd7",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/firenode-dev-builds/firenode-linux-amd64-dev-0888dd7",
-              "sha256": "4acc4427210543c47e90d0aba1017dd4586f9d5b30118b3f5649a95566b538c2"
+              "name": "firenode-linux-amd64-dev-7e1dd5e",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/firenode-dev-builds/firenode-linux-amd64-dev-7e1dd5e",
+              "sha256": "312647eaa147201b9d3b4243017530c9df0ade71cf1d06afb860f67ee223608c"
             }
           }
         }
