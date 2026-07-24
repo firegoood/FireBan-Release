@@ -37,6 +37,7 @@ FIREBAN_BINARY_WORKFLOW_NAME="${FIREBAN_BINARY_WORKFLOW_NAME:-binary-build}"
 FIREBAN_BINARY_DEV_MANIFEST_BRANCH="${FIREBAN_BINARY_DEV_MANIFEST_BRANCH:-dev-build-manifest}"
 FIREBAN_BINARY_DEV_MANIFEST_PATH="${FIREBAN_BINARY_DEV_MANIFEST_PATH:-dev-builds.json}"
 FIREBAN_BINARY_DEV_MANIFEST_URL="${FIREBAN_BINARY_DEV_MANIFEST_URL:-}"
+FIREBAN_BINARY_DEV_RELEASE_TAG="${FIREBAN_BINARY_DEV_RELEASE_TAG:-fireban-dev-builds}"
 INSTALL_MODE_FILE="$APP_DIR/.install-mode"
 CHANNEL_FILE="$APP_DIR/.channel"
 BINARY_BIN_DIR="$APP_DIR/bin"
@@ -2787,18 +2788,45 @@ get_binary_dev_manifest_metadata() {
 
     selected=$(echo "$manifest_payload" | jq -r \
         --arg arch "linux-${binary_arch}" \
-        --arg requested "$requested_version" '
+        --arg requested "$requested_version" \
+        --arg repo "$FIREBAN_RELEASE_REPO" \
+        --arg release_tag "$FIREBAN_BINARY_DEV_RELEASE_TAG" '
+        def legacy_build:
+            .latest? as $latest
+            | if ($latest | type) == "object" then
+                {
+                    tag: ($latest.build_tag // $latest.tag // ""),
+                    assets: (
+                        reduce ($latest.assets[]? | strings) as $name
+                          ({};
+                            if ($name | startswith("fireban-" + $arch + "-")) then
+                              .[$arch] = {
+                                name: $name,
+                                url: ("https://github.com/" + $repo + "/releases/download/" + $release_tag + "/" + $name)
+                              }
+                            else
+                              .
+                            end)
+                    )
+                }
+              else
+                empty
+              end;
+        def builds:
+            ([.builds[]? | select(type == "object")] + [legacy_build]);
         . as $root
-        | def selected_build:
-            if ($requested != "" and $requested != "dev") then
-                ($root.builds[]? | select(.tag == $requested))
-            else
-                (($root.builds[]? | select(.tag == ($root.latest // ""))) // $root.builds[0]?)
-            end;
-        selected_build as $build
+        | builds as $builds
+        | (if ($requested != "" and $requested != "dev") then
+              ($builds[]? | select(.tag == $requested))
+           else
+              (if ($root.latest | type) == "string" then $root.latest else "" end) as $latest_tag
+              | (($builds[]? | select(.tag == $latest_tag)) // $builds[0]?)
+           end) as $build
         | ($build.assets[$arch] // empty) as $asset
-        | select(($build.tag // "") != "" and ($asset.url // "") != "")
-        | [$build.tag, $asset.url, ($asset.name // "")] | @tsv
+        | ($asset.name // "") as $asset_name
+        | ($asset.url // "") as $asset_url
+        | select(($build.tag // "") != "" and $asset_name != "" and $asset_url != "")
+        | [$build.tag, $asset_url, $asset_name] | @tsv
     ' | head -n 1)
 
     if [ -z "$selected" ]; then
@@ -2821,7 +2849,6 @@ get_binary_dev_artifact_metadata() {
     local artifacts_payload
     local artifact_url
     local nightly_workflow
-    local workflow_path
 
     if get_binary_dev_manifest_metadata "$binary_arch" "$requested_version"; then
         return
@@ -2837,16 +2864,19 @@ get_binary_dev_artifact_metadata() {
         *.yml|*.yaml) ;;
         *) nightly_workflow="${nightly_workflow}.yml" ;;
     esac
-    workflow_path=".github/workflows/${nightly_workflow}"
-    workflow_runs_api="https://api.github.com/repos/${FIREBAN_RELEASE_REPO}/actions/runs?per_page=50"
-    workflow_runs_payload=$(github_curl -fsSL "$workflow_runs_api") || {
+    workflow_runs_api="https://api.github.com/repos/${FIREBAN_RELEASE_REPO}/actions/workflows/${nightly_workflow}/runs"
+    workflow_runs_payload=$(github_curl -fsSLG "$workflow_runs_api" \
+        --data-urlencode "branch=${FIREBAN_BINARY_DEV_BRANCH}" \
+        --data-urlencode "event=push" \
+        --data-urlencode "status=success" \
+        --data-urlencode "per_page=100") || {
         colorized_echo red "Unable to read binary dev workflow metadata: $workflow_runs_api" >&2
         exit 1
     }
 
-    latest_run_json=$(echo "$workflow_runs_payload" | jq -c --arg branch "$FIREBAN_BINARY_DEV_BRANCH" --arg workflow_path "$workflow_path" '
+    latest_run_json=$(echo "$workflow_runs_payload" | jq -c --arg branch "$FIREBAN_BINARY_DEV_BRANCH" '
         .workflow_runs[]?
-        | select(.head_branch == $branch and .event == "push" and .conclusion == "success" and .path == $workflow_path)
+        | select(.head_branch == $branch and .event == "push" and .conclusion == "success")
     ' | head -n 1)
 
     if [ -z "$latest_run_json" ]; then
@@ -2865,7 +2895,7 @@ get_binary_dev_artifact_metadata() {
     artifact_name=$(echo "$artifacts_payload" | jq -r --arg preferred "${BINARY_ARTIFACT_PREFIX}-linux-${binary_arch}" --arg arch "linux-${binary_arch}" '
         [
             .artifacts[]?
-            | select((.expired | not) and (.name == $preferred or (.name | startswith("rebecca")) and (.name | contains($arch))))
+            | select((.expired | not) and (.name == $preferred or (.name | startswith("fireban")) and (.name | contains($arch))))
         ]
         | sort_by(if .name == $preferred then 0 else 1 end, .created_at)
         | .[0].name // empty
