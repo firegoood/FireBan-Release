@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
   "project": "fireban",
-  "updated_at": "2026-07-26T19:57:07Z",
+  "updated_at": "2026-07-27T06:11:58Z",
   "channels": {
     "dev": {
-      "latest": "dev-da299ef",
+      "latest": "dev-a195c15",
       "builds": [
         {
-          "tag": "dev-da299ef",
+          "tag": "dev-a195c15",
           "release_tag": "fireban-dev-builds",
-          "source_sha": "da299ef341184141af6d765302fc86fdd09573cf",
-          "created_at": "2026-07-26T19:57:07Z",
+          "source_sha": "a195c156a6eeb6b4bbc1c18c146136e80b06f29d",
+          "created_at": "2026-07-27T06:11:58Z",
           "assets": {
+            "windows-amd64": {
+              "name": "fireban-windows-amd64-dev-a195c15.zip",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-windows-amd64-dev-a195c15.zip",
+              "sha256": "e15ad97fe1556b075bd3c64bbcaece1ff55c3f338562666175b5e3b601d9669f"
+            },
             "linux-amd64": {
-              "name": "fireban-linux-amd64-dev-da299ef.tar.gz",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-amd64-dev-da299ef.tar.gz",
-              "sha256": "b6f8bdfb2ec467d7112b9c89881527befeb7574e48cbd961b476faf8e1ec8db4"
+              "name": "fireban-linux-amd64-dev-a195c15.tar.gz",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-amd64-dev-a195c15.tar.gz",
+              "sha256": "f9b74e31d59112ec8414cc30a556944df6a1f3e31309db18916669d87b1e60c2"
             },
             "linux-arm64": {
-              "name": "fireban-linux-arm64-dev-da299ef.tar.gz",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-arm64-dev-da299ef.tar.gz",
-              "sha256": "236d909a790950c70d963960cd88bb0ef91b86a243fd4c544e2e0729cfe47dd1"
-            },
-            "windows-amd64": {
-              "name": "fireban-windows-amd64-dev-da299ef.zip",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-windows-amd64-dev-da299ef.zip",
-              "sha256": "9bba632b4ef3db42487a2998abe074cf022f2bc05c2841bcc07279512608fa09"
+              "name": "fireban-linux-arm64-dev-a195c15.tar.gz",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-arm64-dev-a195c15.tar.gz",
+              "sha256": "2b7d315d43a2ea0eb7de216086198938bc91ce73a1af17b40378d26a01c96338"
             }
           }
         }
