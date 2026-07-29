@@ -639,12 +639,12 @@ select_node_version() {
     local install_mode="${2:-binary}"
 
     if [ -n "$requested_version" ]; then
-        echo "$requested_version"
+        SELECTED_NODE_VERSION="$requested_version"
         return
     fi
 
     if [ ! -t 0 ]; then
-        echo "latest"
+        SELECTED_NODE_VERSION="latest"
         return
     fi
 
@@ -655,10 +655,10 @@ select_node_version() {
 
     case "$node_version_answer" in
         2|dev|Dev)
-            echo "dev"
+            SELECTED_NODE_VERSION="dev"
         ;;
         ""|1|latest|Latest|stable|Stable)
-            echo "latest"
+            SELECTED_NODE_VERSION="latest"
         ;;
         *)
             colorized_echo red "Invalid release channel selection."
@@ -1125,6 +1125,7 @@ read_node_certificate_bundle() {
     local bundle_file
     local bundle_started=0
     local bundle_completed=0
+    local line=""
     bundle_file=$(mktemp)
     : > "$bundle_file"
 
@@ -1135,7 +1136,8 @@ read_node_certificate_bundle() {
     fi
 
     echo -e "Paste the Node install bundle from the panel, press ENTER on a new line when finished: "
-    while IFS= read -r line </dev/tty; do
+    while IFS= read -r line </dev/tty || [ -n "$line" ]; do
+        line="${line%$'\r'}"
         if [[ -z $line ]]; then
             if [ "$bundle_started" -eq 0 ]; then
                 break
@@ -1514,7 +1516,8 @@ install_command() {
     if [ "$NODE_VERSION_SET" -eq 1 ]; then
         node_version="$NODE_VERSION_REQUESTED"
     else
-        node_version=$(select_node_version "" "$install_mode")
+        select_node_version "" "$install_mode"
+        node_version="$SELECTED_NODE_VERSION"
     fi
     case "$node_version" in
         dev)
