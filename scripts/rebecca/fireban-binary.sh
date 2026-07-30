@@ -3852,6 +3852,9 @@ update_command() {
 
     colorized_echo blue "Updating requested version: $rebecca_version"
     update_rebecca "$rebecca_version"
+    if is_binary_install && [ -d /usr/share/phpmyadmin ]; then
+        configure_phpmyadmin_upload_limits
+    fi
     write_rebecca_channel "$rebecca_version"
     
     colorized_echo blue "Restarting FireBan's services"
