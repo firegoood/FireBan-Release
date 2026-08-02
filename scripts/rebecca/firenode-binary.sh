@@ -1088,8 +1088,7 @@ create_binary_rebecca_node_service() {
     cat > "$BINARY_SERVICE_UNIT" <<EOF
 [Unit]
 Description=FireNode
-After=network-online.target
-Wants=network-online.target
+After=network.target
 
 [Service]
 Type=simple
