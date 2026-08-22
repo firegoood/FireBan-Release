@@ -1,31 +1,31 @@
 {
   "schema_version": 1,
   "project": "fireban",
-  "updated_at": "2026-08-20T06:58:22Z",
+  "updated_at": "2026-08-22T05:40:25Z",
   "channels": {
     "dev": {
-      "latest": "dev-586cdeb",
+      "latest": "dev-0128084",
       "builds": [
         {
-          "tag": "dev-586cdeb",
+          "tag": "dev-0128084",
           "release_tag": "fireban-dev-builds",
-          "source_sha": "586cdebfc2b81f86c4116f1de0861536d58e653a",
-          "created_at": "2026-08-20T06:58:22Z",
+          "source_sha": "01280849d39450803f37338ba84779e72ac0c432",
+          "created_at": "2026-08-22T05:40:25Z",
           "assets": {
-            "windows-amd64": {
-              "name": "fireban-windows-amd64-dev-586cdeb.zip",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-windows-amd64-dev-586cdeb.zip",
-              "sha256": "fdb9dfccd7ac456db8efabad595cc8d336f428dbfc431ff221d70568811bb27b"
+            "linux-amd64": {
+              "name": "fireban-linux-amd64-dev-0128084.tar.gz",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-amd64-dev-0128084.tar.gz",
+              "sha256": "693297b8c8911de737eb4ce26c60171030a32532b502a29456819a2a049f3a49"
             },
             "linux-arm64": {
-              "name": "fireban-linux-arm64-dev-586cdeb.tar.gz",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-arm64-dev-586cdeb.tar.gz",
-              "sha256": "9cbda91655cfae8f74a1cad6f2f2bf0ab7533299b4f321510c93da83101bb5e7"
+              "name": "fireban-linux-arm64-dev-0128084.tar.gz",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-arm64-dev-0128084.tar.gz",
+              "sha256": "877b8268880117cf313c8c1c601cc2aac1715c1e0c3e0cf821ae2befcad6628c"
             },
-            "linux-amd64": {
-              "name": "fireban-linux-amd64-dev-586cdeb.tar.gz",
-              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-linux-amd64-dev-586cdeb.tar.gz",
-              "sha256": "eff203ec7eca580f77141179b1f741bc72883140970854e7ed09469f4388ca4a"
+            "windows-amd64": {
+              "name": "fireban-windows-amd64-dev-0128084.zip",
+              "url": "https://github.com/firegoood/FireBan-Release/releases/download/fireban-dev-builds/fireban-windows-amd64-dev-0128084.zip",
+              "sha256": "adb4560214c6a7d9b7a636b1917717fcb080d1e4fa9cefc98c8ed72d4516c95a"
             }
           }
         }

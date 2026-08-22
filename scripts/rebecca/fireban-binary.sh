@@ -53,6 +53,7 @@ PARSED_DOMAINS=()
 FIREBAN_SCRIPT_FLAVOR="${FIREBAN_SCRIPT_FLAVOR:-binary}"
 FIREBAN_SCRIPT_SOURCE_FILE="${FIREBAN_SCRIPT_SOURCE_FILE:-fireban-binary.sh}"
 FIREBAN_SCRIPT_INSTALL_PATH="${FIREBAN_SCRIPT_INSTALL_PATH:-/usr/local/bin/fireban}"
+FIREBAN_MYSQL_CONFIG_ROOT="${FIREBAN_MYSQL_CONFIG_ROOT:-${REBECCA_MYSQL_CONFIG_ROOT:-/etc/mysql}}"
 
 github_token() {
     local first_non_empty="${FIREBAN_GITHUB_TOKEN:-${GITHUB_TOKEN:-${GH_TOKEN:-}}}"
@@ -1470,6 +1471,43 @@ max_input_time=0"
     if [ "$wrote" = "1" ]; then
         systemctl reload php*-fpm >/dev/null 2>&1 || systemctl restart php*-fpm >/dev/null 2>&1 || true
     fi
+}
+
+prepare_php_app_hosting() {
+    if ! is_binary_install; then
+        colorized_echo red "PHP application hosting is available only in binary installations."
+        return 1
+    fi
+
+    local package php_version
+    if command -v php >/dev/null 2>&1 && command -v composer >/dev/null 2>&1 && command -v curl >/dev/null 2>&1; then
+        php_version=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+        if php -r 'foreach (["curl","zip","mbstring","dom","gd","intl","bcmath","pdo_mysql"] as $ext) { if (!extension_loaded($ext)) exit(1); }' \
+            && { systemctl is-active --quiet "php${php_version}-fpm" || systemctl is-active --quiet php-fpm; } \
+            && { systemctl is-active --quiet cron || systemctl is-active --quiet crond; }; then
+            colorized_echo green "PHP application hosting prerequisites are ready."
+            return 0
+        fi
+    fi
+
+    detect_os
+    for package in php-cli php-fpm php-mysql php-curl php-zip php-mbstring php-xml php-gd php-intl php-bcmath composer unzip curl cron; do
+        install_package "$package"
+    done
+    command -v php >/dev/null 2>&1 && command -v composer >/dev/null 2>&1 && command -v curl >/dev/null 2>&1 || {
+        colorized_echo red "PHP hosting prerequisites are incomplete."
+        return 1
+    }
+    php_version=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
+    systemctl enable --now "php${php_version}-fpm" >/dev/null 2>&1 || systemctl enable --now php-fpm >/dev/null 2>&1 || {
+        colorized_echo red "Could not start PHP-FPM."
+        return 1
+    }
+    systemctl enable --now cron >/dev/null 2>&1 || systemctl enable --now crond >/dev/null 2>&1 || {
+        colorized_echo red "Could not start the cron service."
+        return 1
+    }
+    colorized_echo green "PHP application hosting prerequisites are ready (Apache was not installed)."
 }
 
 phpmyadmin_nginx_config_path() {
@@ -3025,7 +3063,7 @@ install_binary_rebecca() {
     local dev_package_path=""
 
     detect_os
-    for package in curl jq tar gzip unzip; do
+    for package in curl jq tar gzip unzip certbot; do
         if ! command -v "$package" >/dev/null 2>&1; then
             install_package "$package"
         fi
@@ -3240,6 +3278,133 @@ mysql_root_command() {
     fi
 }
 
+managed_database_url_is_local() {
+    local db_url authority host_port
+    db_url=$(get_env_value "SQLALCHEMY_DATABASE_URL")
+    [[ "$db_url" == mysql*://* ]] || return 1
+    authority="${db_url#*://}"
+    authority="${authority%%/*}"
+    host_port="${authority##*@}"
+    case "$host_port" in
+        127.0.0.1|127.0.0.1:*|localhost|localhost:*|\[::1\]|\[::1\]:*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+managed_database_has_replication() {
+    local status gtid
+    if grep -RhsEi '^[[:space:]]*(log[-_]bin|server[-_]id|gtid[-_]mode|relay[-_]log|replicate[-_]|binlog[-_](do|ignore)[-_]db)[[:space:]]*=' "$FIREBAN_MYSQL_CONFIG_ROOT" 2>/dev/null | grep -q .; then
+        return 0
+    fi
+
+    status=$(mysql_root_command --batch --skip-column-names -e "SHOW REPLICA STATUS" 2>/dev/null || true)
+    [ -n "$status" ] && return 0
+    status=$(mysql_root_command --batch --skip-column-names -e "SHOW SLAVE STATUS" 2>/dev/null || true)
+    [ -n "$status" ] && return 0
+    status=$(mysql_root_command --batch --skip-column-names -e "SHOW REPLICAS" 2>/dev/null || true)
+    [ -n "$status" ] && return 0
+    status=$(mysql_root_command --batch --skip-column-names -e "SHOW SLAVE HOSTS" 2>/dev/null || true)
+    [ -n "$status" ] && return 0
+
+    gtid=$(mysql_root_command --batch --skip-column-names -e "SELECT @@GLOBAL.gtid_mode" 2>/dev/null || true)
+    [ -n "$gtid" ] && [ "${gtid^^}" != "OFF" ]
+}
+
+restart_managed_database() {
+    local service_name="$1"
+    systemctl restart "$service_name" >/dev/null 2>&1
+}
+
+wait_for_managed_database() {
+    local attempts=30
+    while [ "$attempts" -gt 0 ]; do
+        if mysql_root_command --batch --skip-column-names -e "SELECT 1" >/dev/null 2>&1; then
+            return 0
+        fi
+        attempts=$((attempts - 1))
+        sleep 1
+    done
+    return 1
+}
+
+disable_managed_database_binary_log() {
+    local database_type config_file service_name extra_databases log_bin backup_file setting_added=0
+
+    is_binary_install || return 0
+    managed_database_url_is_local || return 0
+    database_type=$(get_configured_database_type)
+    case "$database_type" in
+        mysql)
+            config_file="$FIREBAN_MYSQL_CONFIG_ROOT/mysql.conf.d/fireban.cnf"
+            service_name="mysql"
+        ;;
+        mariadb)
+            config_file="$FIREBAN_MYSQL_CONFIG_ROOT/mariadb.conf.d/60-fireban.cnf"
+            service_name="mariadb"
+        ;;
+        *) return 0 ;;
+    esac
+    [ -f "$config_file" ] || return 0
+
+    extra_databases=$(mysql_root_command --batch --skip-column-names -e "SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name NOT IN ('information_schema','mysql','performance_schema','sys','fireban','phpmyadmin')" 2>/dev/null) || {
+        colorized_echo yellow "Could not inspect the managed database; binary logging was left unchanged."
+        return 1
+    }
+    if [ "$extra_databases" != "0" ]; then
+        colorized_echo yellow "Binary logging was left unchanged because this MySQL/MariaDB instance contains databases not managed by FireBan."
+        return 0
+    fi
+    if managed_database_has_replication; then
+        colorized_echo yellow "Binary logging was left unchanged because replication or explicit binlog settings were detected."
+        return 0
+    fi
+
+    log_bin=$(mysql_root_command --batch --skip-column-names -e "SELECT @@GLOBAL.log_bin" 2>/dev/null) || {
+        colorized_echo yellow "Could not read the managed database binary-log status."
+        return 1
+    }
+    if ! grep -Eq '^[[:space:]]*skip-log-bin([[:space:]]*=.*)?[[:space:]]*$' "$config_file"; then
+        backup_file=$(mktemp)
+        cp -p "$config_file" "$backup_file"
+        printf '\nskip-log-bin\n' >> "$config_file"
+        setting_added=1
+    fi
+    if [ "$log_bin" = "0" ]; then
+        [ -n "${backup_file:-}" ] && rm -f "$backup_file"
+        return 0
+    fi
+
+    if ! mysql_root_command -e "PURGE BINARY LOGS BEFORE NOW() - INTERVAL 1 HOUR" >/dev/null 2>&1; then
+        [ "$setting_added" = "1" ] && cp -p "$backup_file" "$config_file"
+        [ -n "${backup_file:-}" ] && rm -f "$backup_file"
+        colorized_echo yellow "Could not safely purge old MySQL/MariaDB binary logs; configuration was left unchanged."
+        return 1
+    fi
+    if ! restart_managed_database "$service_name" || ! wait_for_managed_database; then
+        [ "$setting_added" = "1" ] && cp -p "$backup_file" "$config_file"
+        restart_managed_database "$service_name" || true
+        [ -n "${backup_file:-}" ] && rm -f "$backup_file"
+        colorized_echo yellow "MySQL/MariaDB did not restart with binary logging disabled; the previous configuration was restored."
+        return 1
+    fi
+    log_bin=$(mysql_root_command --batch --skip-column-names -e "SELECT @@GLOBAL.log_bin" 2>/dev/null || true)
+    if [ "$log_bin" != "0" ]; then
+        [ "$setting_added" = "1" ] && cp -p "$backup_file" "$config_file"
+        restart_managed_database "$service_name" || true
+        [ -n "${backup_file:-}" ] && rm -f "$backup_file"
+        colorized_echo yellow "Binary logging remained enabled; the previous configuration was restored."
+        return 1
+    fi
+
+    [ -n "${backup_file:-}" ] && rm -f "$backup_file"
+    colorized_echo green "Binary logging disabled for FireBan's dedicated local MySQL/MariaDB service."
+}
+
+database_maintenance_command() {
+    check_running_as_root
+    disable_managed_database_binary_log
+}
+
 install_host_database() {
     local database_type="$1"
     local package_name
@@ -3250,12 +3415,12 @@ install_host_database() {
         mysql)
             package_name="mysql-server"
             service_name="mysql"
-            config_file="/etc/mysql/mysql.conf.d/fireban.cnf"
+            config_file="$FIREBAN_MYSQL_CONFIG_ROOT/mysql.conf.d/fireban.cnf"
         ;;
         mariadb)
             package_name="mariadb-server"
             service_name="mariadb"
-            config_file="/etc/mysql/mariadb.conf.d/60-fireban.cnf"
+            config_file="$FIREBAN_MYSQL_CONFIG_ROOT/mariadb.conf.d/60-fireban.cnf"
         ;;
         *)
             return 0
@@ -3325,6 +3490,7 @@ EOF
     upsert_env_assignment "MYSQL_PASSWORD" "$MYSQL_PASSWORD"
     upsert_env_assignment "MYSQL_ROOT_PASSWORD" "$MYSQL_ROOT_PASSWORD"
     upsert_env_assignment "SQLALCHEMY_DATABASE_URL" "mysql+pymysql://fireban:${mysql_password_url_encoded}@127.0.0.1:3306/fireban"
+    disable_managed_database_binary_log
 }
 
 configure_binary_database() {
@@ -4012,13 +4178,13 @@ edit_env_command() {
 }
 
 menu_commands() {
-    echo "up down restart status logs cli migrate backup backup-service install update uninstall script-install script-update script-uninstall core-update enable-phpmyadmin disable-phpmyadmin edit edit-env ssl help"
+    echo "up down restart status logs cli migrate backup backup-service database-maintenance install update uninstall script-install script-update script-uninstall core-update enable-phpmyadmin disable-phpmyadmin prepare-php-app-hosting edit edit-env ssl help"
 }
 
 menu_category_for() {
     case "$1" in
         up|down|restart|status|logs) echo "Panel runtime" ;;
-        cli|migrate|backup|backup-service) echo "Administration and data" ;;
+        cli|migrate|backup|backup-service|database-maintenance) echo "Administration and data" ;;
         install|update|uninstall) echo "Install and update" ;;
         script-install|script-update|script-uninstall) echo "Script management" ;;
 		core-update|enable-phpmyadmin|disable-phpmyadmin|edit|edit-env|ssl) echo "Tools" ;;
@@ -4037,6 +4203,7 @@ menu_description_for() {
         migrate) echo "Run database migrations" ;;
         backup) echo "Manual backup launch" ;;
         backup-service) echo "Backup service (Telegram + cron job)" ;;
+        database-maintenance) echo "Safely disable binlog for FireBan's dedicated database" ;;
         install) echo "Install FireBan" ;;
         update) echo "Update to latest version" ;;
         uninstall) echo "Uninstall FireBan" ;;
@@ -4213,9 +4380,11 @@ usage() {
     colorized_echo yellow "  script-uninstall  - Uninstall FireBan script"
     colorized_echo yellow "  backup          - Manual backup launch"
     colorized_echo yellow "  backup-service  - FireBan Backupservice to backup to TG, and a new job in crontab"
+    colorized_echo yellow "  database-maintenance - Safely disable binlog for FireBan's dedicated database"
     colorized_echo yellow "  core-update     - Deprecated; Xray is managed by nodes"
     colorized_echo yellow "  enable-phpmyadmin - Enable phpMyAdmin for local MySQL/MariaDB"
     colorized_echo yellow "  disable-phpmyadmin - Disable phpMyAdmin"
+    colorized_echo yellow "  prepare-php-app-hosting - Install PHP-FPM hosting prerequisites without Apache"
     colorized_echo yellow "  edit            - Edit environment file (via nano or vi editor)"
     colorized_echo yellow "  edit-env        - Edit environment file (via nano or vi editor)"
     colorized_echo yellow "  ssl             - Issue or renew SSL certificates"
@@ -4262,6 +4431,7 @@ dispatch_command() {
         migrate) cli_command migrate "$@" ;;
         backup) backup_command "$@" ;;
         backup-service) backup_service "$@" ;;
+        database-maintenance) database_maintenance_command "$@" ;;
         install) install_command "$@" ;;
         update) update_command "$@" ;;
         uninstall) uninstall_command "$@" ;;
@@ -4271,6 +4441,7 @@ dispatch_command() {
         core-update) update_core_command "$@" ;;
         enable-phpmyadmin) enable_phpmyadmin "$@" ;;
         disable-phpmyadmin) disable_phpmyadmin "$@" ;;
+        prepare-php-app-hosting) prepare_php_app_hosting "$@" ;;
         ssl) ssl_command "$@" ;;
         edit) edit_command "$@" ;;
         edit-env) edit_env_command "$@" ;;
@@ -4279,9 +4450,11 @@ dispatch_command() {
     esac
 }
 
-if [ $# -eq 0 ]; then
-    read_menu_command || exit 0
-    set -- $MENU_COMMAND
-fi
+if [ "${FIREBAN_SOURCE_ONLY:-${REBECCA_SOURCE_ONLY:-0}}" != "1" ]; then
+    if [ $# -eq 0 ]; then
+        read_menu_command || exit 0
+        set -- $MENU_COMMAND
+    fi
 
-dispatch_command "$@"
+    dispatch_command "$@"
+fi
