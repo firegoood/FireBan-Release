@@ -1473,7 +1473,7 @@ max_input_time=0"
     fi
 }
 
-prepare_php_app_hosting() {
+prepare_external_app_hosting() {
     if ! is_binary_install; then
         colorized_echo red "PHP application hosting is available only in binary installations."
         return 1
@@ -4178,7 +4178,7 @@ edit_env_command() {
 }
 
 menu_commands() {
-    echo "up down restart status logs cli migrate backup backup-service database-maintenance install update uninstall script-install script-update script-uninstall core-update enable-phpmyadmin disable-phpmyadmin prepare-php-app-hosting edit edit-env ssl help"
+    echo "up down restart status logs cli migrate backup backup-service database-maintenance install update uninstall script-install script-update script-uninstall core-update enable-phpmyadmin disable-phpmyadmin prepare-external-app-hosting edit edit-env ssl help"
 }
 
 menu_category_for() {
@@ -4187,7 +4187,7 @@ menu_category_for() {
         cli|migrate|backup|backup-service|database-maintenance) echo "Administration and data" ;;
         install|update|uninstall) echo "Install and update" ;;
         script-install|script-update|script-uninstall) echo "Script management" ;;
-		core-update|enable-phpmyadmin|disable-phpmyadmin|edit|edit-env|ssl) echo "Tools" ;;
+		core-update|enable-phpmyadmin|disable-phpmyadmin|prepare-external-app-hosting|edit|edit-env|ssl) echo "Tools" ;;
         *) echo "Help" ;;
     esac
 }
@@ -4213,6 +4213,7 @@ menu_description_for() {
         core-update) echo "Deprecated; Xray is managed by nodes" ;;
         enable-phpmyadmin) echo "Enable phpMyAdmin on local MySQL/MariaDB" ;;
         disable-phpmyadmin) echo "Disable phpMyAdmin panel bridge" ;;
+		prepare-external-app-hosting) echo "Install isolated External Apps hosting prerequisites" ;;
 		edit) echo "Edit environment file" ;;
         edit-env) echo "Edit environment file" ;;
         ssl) echo "Issue or renew SSL certificates" ;;
@@ -4384,7 +4385,7 @@ usage() {
     colorized_echo yellow "  core-update     - Deprecated; Xray is managed by nodes"
     colorized_echo yellow "  enable-phpmyadmin - Enable phpMyAdmin for local MySQL/MariaDB"
     colorized_echo yellow "  disable-phpmyadmin - Disable phpMyAdmin"
-    colorized_echo yellow "  prepare-php-app-hosting - Install PHP-FPM hosting prerequisites without Apache"
+    colorized_echo yellow "  prepare-external-app-hosting - Install PHP-FPM hosting prerequisites without Apache"
     colorized_echo yellow "  edit            - Edit environment file (via nano or vi editor)"
     colorized_echo yellow "  edit-env        - Edit environment file (via nano or vi editor)"
     colorized_echo yellow "  ssl             - Issue or renew SSL certificates"
@@ -4441,7 +4442,7 @@ dispatch_command() {
         core-update) update_core_command "$@" ;;
         enable-phpmyadmin) enable_phpmyadmin "$@" ;;
         disable-phpmyadmin) disable_phpmyadmin "$@" ;;
-        prepare-php-app-hosting) prepare_php_app_hosting "$@" ;;
+        prepare-external-app-hosting|prepare-php-app-hosting) prepare_external_app_hosting "$@" ;;
         ssl) ssl_command "$@" ;;
         edit) edit_command "$@" ;;
         edit-env) edit_env_command "$@" ;;
