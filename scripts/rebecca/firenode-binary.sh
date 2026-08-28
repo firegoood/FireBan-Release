@@ -860,6 +860,13 @@ ensure_ov_binary_prerequisites() {
     fi
 }
 
+ensure_haproxy_prerequisites() {
+    if ! command -v haproxy >/dev/null 2>&1; then
+        detect_os
+        install_package haproxy
+    fi
+}
+
 ensure_python3_venv() {
     detect_os
     if [[ "$OS" == "Ubuntu"* ]] || [[ "$OS" == "Debian"* ]]; then
@@ -1218,8 +1225,6 @@ read_node_certificate_bundle() {
 }
 
 configure_binary_node_env() {
-    local current_grpc_port current_xray_api_port
-
     mkdir -p "$DATA_DIR" "$APP_DIR"
     echo "$BRANCH" > "$BRANCH_FILE"
 
@@ -1231,28 +1236,14 @@ configure_binary_node_env() {
     get_occupied_ports
 
     SERVICE_PORT=$(prompt_node_port_setting "SERVICE_PORT" "SERVICE_PORT" "62050")
+    set_env_value "SERVICE_HOST" "0.0.0.0"
     set_env_value "SERVICE_PORT" "$SERVICE_PORT"
 
-    current_grpc_port=$(get_env_value "GRPC_SERVICE_PORT")
-    current_xray_api_port=$(get_env_value "XRAY_API_PORT")
-    if [ -z "$current_grpc_port" ] && [[ "$current_xray_api_port" =~ ^[0-9]+$ ]]; then
-        current_grpc_port=$((current_xray_api_port + 1))
-    fi
-    while true; do
-        XRAY_API_PORT=$(prompt_node_port_setting "XRAY_API_PORT" "XRAY_API_PORT" "62051" "$SERVICE_PORT")
-        GRPC_SERVICE_PORT=$((XRAY_API_PORT + 1))
-        if [ "$GRPC_SERVICE_PORT" -gt 65535 ]; then
-            colorized_echo red "XRAY_API_PORT must be at most 65534 because FireNode uses the next port for gRPC." >&2
-        elif [ "$GRPC_SERVICE_PORT" -eq "$SERVICE_PORT" ]; then
-            colorized_echo red "Derived gRPC port $GRPC_SERVICE_PORT conflicts with SERVICE_PORT. Please choose another XRAY_API_PORT." >&2
-        elif is_port_occupied "$GRPC_SERVICE_PORT" && [ "$GRPC_SERVICE_PORT" != "$current_grpc_port" ]; then
-            colorized_echo red "Derived gRPC port $GRPC_SERVICE_PORT is already in use. Please choose another XRAY_API_PORT." >&2
-        else
-            break
-        fi
-    done
+    XRAY_API_PORT=$(prompt_node_port_setting "XRAY_API_PORT" "XRAY_API_PORT" "62051" "$SERVICE_PORT")
+    set_env_value "XRAY_API_HOST" "127.0.0.1"
     set_env_value "XRAY_API_PORT" "$XRAY_API_PORT"
-    set_env_value "GRPC_SERVICE_PORT" "$GRPC_SERVICE_PORT"
+    remove_env_value "GRPC_SERVICE_HOST"
+    remove_env_value "GRPC_SERVICE_PORT"
 
     set_env_value "FIRENODE_DATA_DIR" "$DATA_DIR"
     set_env_value "SSL_CLIENT_CERT_FILE" "$CERT_FILE"
@@ -1314,6 +1305,7 @@ install_binary_rebecca_node() {
         fi
     done
     ensure_ov_binary_prerequisites
+    ensure_haproxy_prerequisites
 
     binary_arch=$(detect_node_binary_arch)
     tmp_dir=$(mktemp -d)
@@ -1582,10 +1574,8 @@ install_command() {
     up_rebecca_node
     SERVICE_PORT="${SERVICE_PORT:-$(get_env_value "SERVICE_PORT")}"
     XRAY_API_PORT="${XRAY_API_PORT:-$(get_env_value "XRAY_API_PORT")}"
-    GRPC_SERVICE_PORT="${GRPC_SERVICE_PORT:-$(get_env_value "GRPC_SERVICE_PORT")}"
-    GRPC_SERVICE_PORT="${GRPC_SERVICE_PORT:-$((XRAY_API_PORT + 1))}"
     echo "Use IP $NODE_IP, service port $SERVICE_PORT, and Xray API port $XRAY_API_PORT when adding this node to FireBan."
-    colorized_echo yellow "Allow the FireBan server to reach FireNode's mTLS gRPC port $GRPC_SERVICE_PORT."
+    colorized_echo yellow "Allow the FireBan server to reach FireNode's mTLS control port $SERVICE_PORT."
     colorized_echo yellow "Run '$APP_NAME logs' if you want to follow live node logs."
 }
 
@@ -2164,20 +2154,17 @@ get_node_service_status() {
 }
 
 print_node_menu_status_summary() {
-    local service_port xray_api_port grpc_service_port
+    local service_port xray_api_port
     service_port=$(get_env_value "SERVICE_PORT")
     xray_api_port=$(get_env_value "XRAY_API_PORT")
-    grpc_service_port=$(get_env_value "GRPC_SERVICE_PORT")
     service_port="${service_port:-62050}"
     xray_api_port="${xray_api_port:-62051}"
-    grpc_service_port="${grpc_service_port:-$((xray_api_port + 1))}"
     ui_status_row "Version" "$(get_node_current_version)"
     ui_status_row "Service" "$(get_node_service_status)"
     ui_status_row "Mode" "$(get_install_mode)"
     ui_status_row "Node IP" "${NODE_IP:-unknown}"
-    ui_status_row "Service port" "$service_port"
+    ui_status_row "mTLS control" "$service_port"
     ui_status_row "Xray API" "$xray_api_port"
-    ui_status_row "mTLS gRPC" "$grpc_service_port"
     ui_status_row "Cert" "$CERT_FILE"
 }
 
@@ -2227,17 +2214,14 @@ usage() {
     if [ -f "$ENV_FILE" ]; then
         SERVICE_PORT=$(get_env_value "SERVICE_PORT")
         XRAY_API_PORT=$(get_env_value "XRAY_API_PORT")
-        GRPC_SERVICE_PORT=$(get_env_value "GRPC_SERVICE_PORT")
     fi
     
     SERVICE_PORT=${SERVICE_PORT:-$DEFAULT_SERVICE_PORT}
     XRAY_API_PORT=${XRAY_API_PORT:-$DEFAULT_XRAY_API_PORT}
-    GRPC_SERVICE_PORT=${GRPC_SERVICE_PORT:-$((XRAY_API_PORT + 1))}
 
     colorized_echo cyan "Ports:"
-    colorized_echo magenta "  Service port: $SERVICE_PORT"
-    colorized_echo magenta "  Xray API port: $XRAY_API_PORT"
-    colorized_echo magenta "  mTLS gRPC port: $GRPC_SERVICE_PORT"
+    colorized_echo magenta "  mTLS control port: $SERVICE_PORT"
+    colorized_echo magenta "  Local Xray API port: $XRAY_API_PORT"
     
     colorized_echo blue "================================="
     echo
