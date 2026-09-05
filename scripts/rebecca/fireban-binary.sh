@@ -1516,12 +1516,16 @@ prepare_external_app_node_hosting() {
         return 1
     fi
 
-    local install_root="/opt/rebecca/node"
+    local install_root="/opt/fireban/node"
+    local legacy_install_root="/opt/rebecca/node"
     local current="$install_root/current"
-    if [ -x "$current/bin/node" ] && [ "$($current/bin/node -p 'Number(process.versions.node.split(".")[0])')" -ge 20 ]; then
-        colorized_echo green "Node.js application hosting prerequisites are ready."
-        return 0
-    fi
+    local legacy_current="$legacy_install_root/current"
+    for runtime_current in "$current" "$legacy_current"; do
+        if [ -x "$runtime_current/bin/node" ] && [ "$($runtime_current/bin/node -p 'Number(process.versions.node.split(".")[0])')" -ge 20 ]; then
+            colorized_echo green "Node.js application hosting prerequisites are ready."
+            return 0
+        fi
+    done
 
     detect_os
     local package

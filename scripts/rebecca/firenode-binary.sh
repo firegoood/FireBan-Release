@@ -982,27 +982,36 @@ get_node_binary_release_asset_metadata() {
         release_api="https://api.github.com/repos/${FIRENODE_RELEASE_REPO}/releases/tags/${node_version}"
     fi
 
-    release_payload=$(github_curl -fsSL "$release_api") || {
-        colorized_echo red "Unable to read FireNode release metadata: $release_api" >&2
-        exit 1
-    }
-
-    resolved_tag=$(echo "$release_payload" | jq -r '.tag_name // empty')
-    node_asset_name="firenode-${resolved_tag}-linux-${binary_arch}"
-
-    node_asset_url=$(echo "$release_payload" | jq -r --arg name "$node_asset_name" '
-        .assets[]?
-        | select(.name == $name)
-        | .browser_download_url
-    ' | head -n 1)
-
-    if [ -z "$node_asset_url" ] || [ "$node_asset_url" = "null" ]; then
-        colorized_echo red "No FireNode binary release assets found for linux-${binary_arch}." >&2
-        colorized_echo yellow "Use --dev after the dev binary workflow succeeds." >&2
-        exit 1
+    local attempts=1
+    if [ "$node_version" = "latest" ]; then
+        # GitHub can expose a release before its workflow assets finish uploading.
+        attempts=5
     fi
+    for attempt in $(seq 1 "$attempts"); do
+        release_payload=$(github_curl -fsSL "$release_api" 2>/dev/null) || release_payload=""
+        resolved_tag=$(echo "$release_payload" | jq -r '.tag_name // empty')
+        node_asset_name="firenode-${resolved_tag}-linux-${binary_arch}"
+        node_asset_url=$(echo "$release_payload" | jq -r --arg name "$node_asset_name" '
+            .assets[]?
+            | select(.name == $name)
+            | .browser_download_url
+        ' | head -n 1)
+        if [ -n "$node_asset_url" ] && [ "$node_asset_url" != "null" ]; then
+            printf '%s|%s\n' "${resolved_tag:-$node_version}" "$node_asset_url"
+            return 0
+        fi
+        if [ "$attempt" -lt "$attempts" ]; then
+            sleep 2
+        fi
+    done
 
-    printf '%s|%s\n' "${resolved_tag:-$node_version}" "$node_asset_url"
+    if [ -z "$release_payload" ]; then
+        colorized_echo red "Unable to read FireNode release metadata: $release_api" >&2
+    else
+        colorized_echo red "No FireNode binary release assets found for linux-${binary_arch}." >&2
+        colorized_echo yellow "Use --dev after the dev binary workflow succeeds, or use Dockerized install." >&2
+    fi
+    exit 1
 }
 
 get_node_binary_dev_artifact_metadata() {
@@ -1141,7 +1150,6 @@ WorkingDirectory=$APP_DIR
 Environment=FIRENODE_APP_NAME=$APP_NAME
 Environment=FIRENODE_APP_DIR=$APP_DIR
 Environment=FIRENODE_DATA_DIR=$DATA_DIR
-Environment=REBECCA_DATA_DIR=$DATA_DIR
 Environment=FIRENODE_INSTALL_MODE=binary
 Environment=FIRENODE_BINARY_METADATA_FILE=$BINARY_METADATA_FILE
 ExecStart=$BINARY_NODE
@@ -1463,6 +1471,15 @@ down_rebecca_node() {
 	systemctl stop "$APP_NAME.service"
 }
 
+stop_rebecca_node_for_uninstall() {
+    if [ "$install_mode" != "binary" ]; then
+        detect_compose
+        down_rebecca_node
+    elif is_rebecca_node_up; then
+        down_rebecca_node
+    fi
+}
+
 show_rebecca_node_logs() {
 	journalctl -u "$APP_NAME.service" --no-pager
 }
@@ -1604,10 +1621,8 @@ uninstall_command() {
         exit 1
     fi
 
-	if [ "$node_exists" -eq 1 ]; then
-		if is_rebecca_node_up; then
-			down_rebecca_node
-		fi
+    if [ "$node_exists" -eq 1 ]; then
+        stop_rebecca_node_for_uninstall
     fi
 
     uninstall_rebecca_node_script
