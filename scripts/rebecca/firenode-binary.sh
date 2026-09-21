@@ -1434,24 +1434,10 @@ install_binary_rebecca_node() {
         ui_spinner_run "Installing FireNode custom binary" install -m 755 "$FIRENODE_BINARY_OVERRIDE" "$tmp_dir/firenode"
         resolved_version="${FIRENODE_BINARY_OVERRIDE_VERSION:-custom}"
         artifact_url="local-override"
-	elif [[ "$node_version" =~ ^dev-[0-9a-fA-F]{7,40}$ ]]; then
-		IFS='|' read -r resolved_version artifact_url < <(get_node_binary_dev_artifact_metadata_for_version "$node_version" "$binary_arch")
-		package_path="$tmp_dir/firenode-binaries.zip"
-		ui_spinner_run "Downloading FireNode dev binary artifact" curl -fL "$artifact_url" -o "$package_path"
-		ui_spinner_run "Extracting FireNode dev artifact" unzip -j -o "$package_path" -d "$tmp_dir"
-		normalize_node_dev_artifact "$tmp_dir" "$binary_arch"
-	elif [ "$node_version" = "dev" ]; then
-		IFS='|' read -r resolved_version artifact_url < <(get_node_binary_dev_artifact_metadata "$binary_arch")
-		if [[ "$artifact_url" == *.zip ]]; then
-			package_path="$tmp_dir/firenode-binaries.zip"
-			ui_spinner_run "Downloading FireNode dev binary artifact" curl -fL "$artifact_url" -o "$package_path"
-			ui_spinner_run "Extracting FireNode dev artifact" unzip -j -o "$package_path" -d "$tmp_dir"
-			normalize_node_dev_artifact "$tmp_dir" "$binary_arch"
-		else
-			ui_spinner_run "Downloading FireNode dev binary" curl -fL "$artifact_url" -o "$tmp_dir/firenode"
-			chmod +x "$tmp_dir/firenode"
-		fi
     else
+        # FireNode is private. All installable binaries, including dev and
+        # exact dev builds, are published in FireBan-Release and resolved from
+        # its checksum-protected public manifest.
         IFS='|' read -r resolved_version artifact_url artifact_name artifact_sha256 < <(get_node_binary_distribution_metadata "$binary_arch" "$node_version")
         package_path="$tmp_dir/${artifact_name:-firenode-linux-${binary_arch}}"
         ui_spinner_run "Downloading FireNode binary" curl -fL "$artifact_url" -o "$package_path"
