@@ -4532,10 +4532,14 @@ dispatch_command() {
 }
 
 if [ "${FIREBAN_SOURCE_ONLY:-${REBECCA_SOURCE_ONLY:-0}}" != "1" ]; then
+    if [ ! -t 0 ] && [ -r /dev/tty ] && { : </dev/tty; } 2>/dev/null; then
+        exec </dev/tty
+    fi
     if [ $# -eq 0 ]; then
         read_menu_command || exit 0
         set -- $MENU_COMMAND
     fi
 
     dispatch_command "$@"
+    exit $?
 fi
